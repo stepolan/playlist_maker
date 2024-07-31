@@ -1,3 +1,5 @@
+<!-- ./frontend/App.svelte -->
+
 <script>
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
@@ -5,19 +7,51 @@
   const searchResults = writable([]);
   const selectedPlaylists = writable([]);
   const combinedTracks = writable([]);
-
+  const userToken = writable('');
+  let musicKitInstance = null;
+  let isAuthorized = false;
   let searchTerm = '';
 
+  // Initialize MusicKit and set up event listeners
+  onMount(() => {
+    document.addEventListener("musickitloaded", () => {
+      musicKitInstance = MusicKit.getInstance();
+      musicKitInstance.configure({
+        developerToken: 'YOUR_DEVELOPER_TOKEN',
+        app: {
+          name: 'Apple Music Playlist Combiner',
+          build: '1.0'
+        }
+      });
+      musicKitInstance.player.volume = 0.5; // Set initial volume
+    });
+  });
+
+  // Function to authenticate the user and retrieve the User Token
+  async function authenticateUser() {
+    try {
+      const token = await musicKitInstance.authorize();
+      userToken.set(token);
+      isAuthorized = true;
+      console.log("User Token: ", token);
+    } catch (error) {
+      console.error("Authentication failed:", error);
+    }
+  }
+
+  // Function to search for playlists using the API
   async function searchPlaylists() {
     const response = await fetch(`/api/search?query=${searchTerm}`);
     const data = await response.json();
     searchResults.set(data.results.playlists.data);
   }
 
+  // Function to add selected playlist to the list of selected playlists
   function selectPlaylist(playlist) {
     selectedPlaylists.update(playlists => [...playlists, playlist]);
   }
 
+  // Function to create a combined playlist from selected playlists
   async function createCombinedPlaylist() {
     const tracks = [];
     const playlists = $selectedPlaylists;
@@ -46,6 +80,11 @@
 
 <main>
   <h1>Apple Music Playlist Combiner</h1>
+
+  <!-- Button to authenticate the user if not authorized -->
+  {#if !isAuthorized}
+    <button on:click={authenticateUser}>Login with Apple Music</button>
+  {/if}
 
   <input type="text" bind:value={searchTerm} placeholder="Search for playlists" />
   <button on:click={searchPlaylists}>Search</button>

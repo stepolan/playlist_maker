@@ -22,6 +22,8 @@ apple_pl_combiner/
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.js
+├── tools/
+│   └── apple_dev_token.py
 └── run.py
 ```
 
@@ -35,8 +37,8 @@ apple_pl_combiner/
     mkdir apple_pl_combiner
     cd apple_pl_combiner
     mkdir /apple
-    mkdir -p /backend /frontend/public /frontend/src
-    touch /LICENSE /backend/app.py /backend/.env /backend/environment.yml /frontend/package.json /frontend/vite.config.js
+    mkdir -p /backend /frontend/public /frontend/src /tools
+    touch /LICENSE /backend/app.py /backend/.env /backend/environment.yml /frontend/package.json /frontend/vite.config.js /tools/apple_dev_token.py
     ```
 
 2. **Install Conda**: If Conda is not already installed, download and install it from [Conda's official site](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html).
@@ -47,6 +49,7 @@ apple_pl_combiner/
     name: myenv
     channels:
         - defaults
+        - conda-forge
     dependencies:
         - python=3.8
         - flask
@@ -202,8 +205,35 @@ apple_pl_combiner/
       const searchResults = writable([]);
       const selectedPlaylists = writable([]);
       const combinedTracks = writable([]);
-
+      const userToken = writable('');
+      let musicKitInstance = null;
+      let isAuthorized = false;
       let searchTerm = '';
+
+      onMount(() => {
+        document.addEventListener("musickitloaded", () => {
+          musicKitInstance = MusicKit.getInstance();
+          musicKitInstance.configure({
+            developerToken: 'YOUR_DEVELOPER_TOKEN',
+            app: {
+              name: 'Apple Music Playlist Combiner',
+              build: '1.0'
+            }
+          });
+          musicKitInstance.player.volume = 0.5;
+        });
+      });
+
+      async function authenticateUser() {
+        try {
+          const token = await musicKitInstance.authorize();
+          userToken.set(token);
+          isAuthorized = true;
+          console.log("User Token: ", token);
+        } catch (error) {
+          console.error("Authentication failed:", error);
+        }
+      }
 
       async function searchPlaylists() {
         const response = await fetch(`/api/search?query=${searchTerm}`);
@@ -243,6 +273,10 @@ apple_pl_combiner/
 
     <main>
       <h1>Apple Music Playlist Combiner</h1>
+
+      {#if !isAuthorized}
+        <button on:click={authenticateUser}>Login with Apple Music</button>
+      {/if}
 
       <input type="text" bind:value={searchTerm} placeholder="Search for playlists" />
       <button on:click={searchPlaylists}>Search</button>
@@ -331,3 +365,138 @@ apple_pl_combiner/
     ```
 
 3. **Install VS Code extensions** for Python, Svelte, and other tools.
+
+## Generating Developer and User Tokens
+
+To interact with the Apple Music API, you need a Developer Token and a User Token.
+
+### Developer Token
+
+1. **Create an Apple ID**: If you don’t have one, create an Apple ID [here](https://appleid.apple.com/account).
+
+2. **Enroll in the Apple Developer Program**: Visit [developer.apple.com/programs/enroll](https://developer.apple.com/programs/enroll) and enroll using your Apple ID.
+
+3. **Generate a Key**: 
+   - Go to the [Apple Developer Account](https://developer.apple.com/account/) and navigate to "Certificates, Identifiers & Profiles".
+   - Create a new key under the "Keys" section and enable the "MusicKit" capability.
+   - Download the private key file (.p8) immediately after creating it.
+
+4. **Use the Script to Generate Developer Token**:
+   - Place the `apple_dev_token.py` script in the `/tools` directory.
+
+    ```python
+    # tools/apple_dev_token.py
+
+    import jwt
+    import time
+    import os
+    import json
+
+    CONFIG_FILE = 'apple_music_config.json'
+
+    CONFIG_TEMPLATE = {
+        "TEAM_ID": "YOUR_TEAM_ID",
+        "KEY_ID": "YOUR_KEY_ID",
+        "PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----"
+    }
+
+    def create_config_template():
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(CONFIG_TEMPLATE, f, indent=4)
+        print(f"Configuration template created: {CONFIG_FILE}")
+        print("Please fill in your TEAM_ID, KEY_ID, and PRIVATE_KEY.")
+
+    def load_config():
+        if not os.path.exists(CONFIG_FILE):
+            print("Configuration file not found.")
+            create_config_template()
+            return None
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+        return config
+
+    def generate_developer_token(team_id, key_id, private_key):
+        current_time = int(time.time())
+        expiry_time = current_time + 86400 * 180
+        headers = {
+            "alg": "ES256",
+            "kid": key_id
+        }
+        payload = {
+            "iss": team_id,
+            "iat": current_time,
+            "exp": expiry_time
+        }
+
+        token = jwt.encode(payload, private_key, algorithm='ES256', headers=headers)
+        return token
+
+    def main():
+        config = load_config()
+        if not config:
+            return
+
+        team_id = config['TEAM_ID']
+        key_id = config['KEY_ID']
+        private_key = config['PRIVATE_KEY']
+
+        developer_token = generate_developer_token(team_id, key_id, private_key)
+        print(f"Developer Token: {developer_token}")
+
+        delete_choice = input(f"Do you want to delete the {CONFIG_FILE} file? (yes/no): ").strip().lower()
+        if delete_choice == 'yes':
+            os.remove(CONFIG_FILE)
+            print(f"{CONFIG_FILE} has been deleted.")
+        else:
+            print(f"{CONFIG_FILE} has been kept.")
+
+    if __name__ == '__main__':
+        main()
+    ```
+
+5. **Run the Script**: 
+   - Navigate to the `/tools` directory and run the script to generate the Developer Token.
+
+   ```bash
+   python apple_dev_token.py
+   ```
+
+### User Token
+
+1. **Include MusicKit JS in Frontend**:
+   - Add the MusicKit JS script in your `index.html` file.
+
+   ```html
+   <!DOCTYPE html>
+   <html lang="en">
+   <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Apple Music Playlist Combiner</title>
+     <script src="https://js-cdn.music.apple.com/musickit/v1/musickit.js"></script>
+   </head>
+   <body>
+     <script type="text/javascript">
+       document.addEventListener("musickitloaded", function() {
+         MusicKit.configure({
+           developerToken: 'YOUR_DEVELOPER_TOKEN',
+           app: {
+             name: 'Apple Music Playlist Combiner',
+             build: '1.0'
+           }
+         });
+       });
+     </script>
+     <div id="svelte-app"></div>
+     <script src="/build/bundle.js"></script>
+   </body>
+   </html>
+   ```
+
+2. **User Authentication**:
+   - Implement user authentication in `App.svelte` using MusicKit JS, as shown in the frontend section above.
+
+3. **Handling the User Token**:
+   - Use the User Token for making authenticated API calls to access user-specific Apple Music content.
+
+By following these steps, you can set up your environment, implement both backend and frontend components, and manage the necessary authentication tokens for accessing the Apple Music API.

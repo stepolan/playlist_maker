@@ -1,12 +1,34 @@
 # app.py
 
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-import os
 from dotenv import load_dotenv
 
-load_dotenv()
+def ensure_env_vars():
+    """Ensure required environment variables are set."""
+    required_vars = {
+        'DEVELOPER_TOKEN': 'Enter your Apple Music Developer Token: ',
+        'USER_TOKEN': 'Enter your Apple Music User Token: '
+    }
+    env_file_path = '.env'
+    env_exists = os.path.exists(env_file_path)
+
+    if env_exists:
+        load_dotenv()
+    else:
+        # Create .env file if it does not exist
+        open(env_file_path, 'a').close()
+
+    for var, prompt in required_vars.items():
+        if not os.getenv(var):
+            value = input(prompt)
+            with open(env_file_path, 'a') as env_file:
+                env_file.write(f'{var}={value}\n')
+            os.environ[var] = value
+
+ensure_env_vars()
 
 app = Flask(__name__)
 CORS(app)
@@ -76,4 +98,4 @@ def create():
     return jsonify(new_playlist)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=False)

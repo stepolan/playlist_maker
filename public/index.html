@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apple Music Playlist Combiner</title>
+  <script src="https://js-cdn.music.apple.com/musickit/v1/musickit.js"></script>
+</head>
+<body>
+  <script type="text/javascript">
+    // This ensures MusicKit JS is available globally
+    document.addEventListener("musickitloaded", function() {
+      MusicKit.configure({
+        developerToken: 'YOUR_DEVELOPER_TOKEN',
+        app: {
+          name: 'Apple Music Playlist Combiner',
+          build: '1.0'
+        }
+      });
+    });
+  </script>
+  <div id="svelte-app"></div>
+  <script src="/build/bundle.js"></script>
+</body>
+</html>
